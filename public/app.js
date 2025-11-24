@@ -1,278 +1,292 @@
-const API = location.origin;
+// ================== CONFIG BÁSICA ==================
 
-// estados globais
-let tokenCliente = null;
-let tokenRest = null;
+const API = "http://localhost:3000";
+
+// estados em memória
 let clienteLogado = null;
 let restLogado = null;
+let tokenCliente = null;
+let tokenRest = null;
 
-let carrinho = {
-  restauranteId: null,
-  itens: []
-};
+let carrinho = [];
+let restauranteSelecionado = null;
 
-// status possíveis (igual ao ENUM do banco)
-const STATUS_PEDIDO = ["CRIADO","EM_PREPARO","A_CAMINHO","ENTREGUE","CANCELADO"];
+// possíveis status de pedido
+const STATUS_PEDIDO = ["CRIADO", "EM_PREPARO", "A_CAMINHO", "ENTREGUE", "CANCELADO"];
 
-/* ========= FUNÇÕES UTIL ========= */
+// ================== HELPERS DE UI ==================
 
-// só permite letras (com acento) e espaço
-function permitirSomenteLetras(campoId) {
-  const campo = document.getElementById(campoId);
-  if (!campo) return;
+function $(id) {
+  return document.getElementById(id);
+}
 
-  campo.addEventListener("input", () => {
-    campo.value = campo.value.replace(/[^A-Za-zÀ-ÿ ]/g, "");
-  });
+function esconderTudo() {
+  ["login-cliente", "login-restaurante", "painel-cliente", "painel-restaurante"]
+    .forEach((id) => $(id)?.classList.add("oculto"));
+
+  $("area-pedidos-cliente")?.classList.add("oculto");
+  $("area-pedidos-rest")?.classList.add("oculto");
 }
 
 function classeStatus(status) {
   switch (status) {
-    case "CRIADO":        return "pedido-status criado";
-    case "EM_PREPARO":    return "pedido-status preparo";
-    case "A_CAMINHO":     return "pedido-status caminho";
-    case "ENTREGUE":      return "pedido-status entregue";
-    case "CANCELADO":     return "pedido-status cancelado";
-    default:              return "pedido-status";
+    case "CRIADO":
+      return "status status-criado";
+    case "EM_PREPARO":
+      return "status status-preparo";
+    case "A_CAMINHO":
+      return "status status-caminho";
+    case "ENTREGUE":
+      return "status status-entregue";
+    case "CANCELADO":
+      return "status status-cancelado";
+    default:
+      return "status";
   }
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  // máscaras de nome nos cadastros
-  permitirSomenteLetras("cad-cli-nome");
-  permitirSomenteLetras("cad-rest-nome");
-});
-
-/* ========= TELAS LOGIN (index) ========= */
-
-function esconderTudo() {
-  document
-    .querySelectorAll(".card, #painel-cliente, #painel-restaurante")
-    .forEach(el => el.classList.add("oculto"));
-}
+// ================== LOGIN / FLUXO INICIAL ==================
 
 function mostrarLoginCliente() {
   esconderTudo();
-  const el = document.getElementById("login-cliente");
-  if (el) el.classList.remove("oculto");
+  $("login-cliente").classList.remove("oculto");
 }
 
 function mostrarLoginRest() {
   esconderTudo();
-  const el = document.getElementById("login-restaurante");
-  if (el) el.classList.remove("oculto");
+  $("login-restaurante").classList.remove("oculto");
 }
 
-/* ========= LOGIN ========= */
+// ----- Cliente -----
 
 async function loginCliente() {
-  const email = document.getElementById("cli-email").value;
-  const senha = document.getElementById("cli-senha").value;
+  const email = $("cli-email").value.trim();
+  const senha = $("cli-senha").value.trim();
 
-  const r = await fetch(`${API}/clientes/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, senha })
-  });
-
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.erro || "Erro ao fazer login do cliente.");
+  if (!email || !senha) {
+    alert("Preencha email e senha.");
     return;
   }
 
-  tokenCliente = data.token;
-  clienteLogado = data.cliente;
+  try {
+    const r = await fetch(`${API}/clientes/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, senha }),
+    });
 
-  await carregarRestaurantes();
+    const data = await r.json();
 
-  esconderTudo();
-  const painel = document.getElementById("painel-cliente");
-  if (painel) painel.classList.remove("oculto");
+    if (!r.ok) {
+      alert(data.erro || "Erro ao fazer login.");
+      return;
+    }
+
+    clienteLogado = data.cliente || data;
+    tokenCliente = data.token || null;
+
+    esconderTudo();
+    $("painel-cliente").classList.remove("oculto");
+    carregarRestaurantes();
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao fazer login.");
+  }
 }
+
+// ----- Restaurante -----
 
 async function loginRestaurante() {
-  const email = document.getElementById("rest-email").value;
-  const senha = document.getElementById("rest-senha").value;
+  const email = $("rest-email").value.trim();
+  const senha = $("rest-senha").value.trim();
 
-  const r = await fetch(`${API}/restaurantes/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, senha })
-  });
-
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.erro || "Erro ao fazer login do restaurante.");
+  if (!email || !senha) {
+    alert("Preencha email e senha.");
     return;
   }
 
-  tokenRest = data.token;
-  restLogado = data.restaurante;
+  try {
+    const r = await fetch(`${API}/restaurantes/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, senha }),
+    });
 
-  await carregarMeuCardapio();
+    const data = await r.json();
 
-  esconderTudo();
-  const painel = document.getElementById("painel-restaurante");
-  if (painel) painel.classList.remove("oculto");
+    if (!r.ok) {
+      alert(data.erro || "Erro ao fazer login.");
+      return;
+    }
 
-  document.querySelector(".form-cardapio")?.classList.remove("oculto");
+    restLogado = data.restaurante || data;
+    tokenRest = data.token || null;
 
-}
-
-/* ========= CADASTRO ========= */
-
-async function cadastrarCliente() {
-  const payload = {
-    nome: document.getElementById("cad-cli-nome").value,
-    email: document.getElementById("cad-cli-email").value,
-    telefone: document.getElementById("cad-cli-tel").value,
-    endereco: document.getElementById("cad-cli-end").value,
-    senha: document.getElementById("cad-cli-senha").value
-  };
-
-  const r = await fetch(`${API}/clientes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.erro || "Erro ao cadastrar cliente.");
-    return;
+    esconderTudo();
+    $("painel-restaurante").classList.remove("oculto");
+    document.querySelector(".form-cardapio")?.classList.remove("oculto");
+    carregarMeuCardapio();
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao fazer login.");
   }
-
-  alert("Cliente cadastrado com sucesso!");
-  location.href = "index.html";
 }
 
-async function cadastrarRestaurante() {
-  const payload = {
-    nome_restaurante: document.getElementById("cad-rest-nome").value,
-    tipo_cozinha: document.getElementById("cad-rest-tipo").value,
-    telefone_restaurante: document.getElementById("cad-rest-tel").value,
-    email: document.getElementById("cad-rest-email").value,
-    senha: document.getElementById("cad-rest-senha").value
-  };
-
-  const r = await fetch(`${API}/restaurantes`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.erro || "Erro ao cadastrar restaurante.");
-    return;
-  }
-
-  alert("Restaurante cadastrado!");
-  location.href = "index.html";
-}
-
-/* ========= CLIENTE — RESTAURANTES / CARDÁPIO ========= */
+// ================== CLIENTE - RESTAURANTES & CARDÁPIO ==================
 
 async function carregarRestaurantes() {
-  const elLista = document.getElementById("lista-restaurantes");
-  if (!elLista) return;
+  const listaRest = $("lista-restaurantes");
+  if (!listaRest) return;
 
-  const r = await fetch(`${API}/restaurantes`);
-  const lista = await r.json();
+  listaRest.innerHTML = "Carregando restaurantes...";
 
-  elLista.innerHTML = "";
+  try {
+    const r = await fetch(`${API}/restaurantes`);
+    const dados = await r.json();
 
-  lista.forEach(rest => {
-    elLista.innerHTML += `
-      <div class="rest-card"
-           onclick="abrirCardapio(${rest.id_restaurante}, '${rest.nome_restaurante.replace(/'/g,"\\'")}')">
-        <img src="https://picsum.photos/400/300?food=${rest.id_restaurante}">
-        <div class="rest-info">
-          <h3>${rest.nome_restaurante}</h3>
-          <p>${rest.tipo_cozinha}</p>
-        </div>
-      </div>
-    `;
-  });
+    if (!r.ok) {
+      listaRest.innerHTML = "<p>Erro ao carregar restaurantes.</p>";
+      return;
+    }
+
+    if (!dados.length) {
+      listaRest.innerHTML = "<p>Nenhum restaurante cadastrado.</p>";
+      return;
+    }
+
+    listaRest.innerHTML = "";
+
+    dados.forEach((rest) => {
+      listaRest.innerHTML += `
+        <article class="card restaurante-card">
+          <div class="card-body">
+            <h3>${rest.nome_restaurante}</h3>
+            <p>${rest.tipo_cozinha}</p>
+            <button class="btn red cheio"
+                    onclick="abrirCardapio(${rest.id_restaurante}, '${rest.nome_restaurante.replace(
+                      /'/g,
+                      "\\'"
+                    )}')">
+              Ver cardápio
+            </button>
+          </div>
+        </article>
+      `;
+    });
+  } catch (e) {
+    console.error(e);
+    listaRest.innerHTML = "<p>Erro de conexão ao buscar restaurantes.</p>";
+  }
 }
 
-async function abrirCardapio(id, nome) {
-  const area = document.getElementById("cardapio-area");
-  const titulo = document.getElementById("titulo-cardapio");
-  const listaEl = document.getElementById("lista-cardapio");
-  if (!area || !titulo || !listaEl) return;
-
-  carrinho.restauranteId = id;
-  carrinho.itens = [];
-
-  area.classList.remove("oculto");
-  titulo.textContent = `Cardápio — ${nome}`;
-
-  const r = await fetch(`${API}/cardapio/restaurantes/${id}`);
-  const lista = await r.json();
-
-  listaEl.innerHTML = "";
-
-  lista.forEach(item => {
-    listaEl.innerHTML += `
-      <div class="cardapio-item">
-        <img src="https://picsum.photos/400/300?dish=${item.id_item_cardapio}">
-        <div class="cardapio-info">
-          <h4>${item.nome_item}</h4>
-          <p>${item.descricao || ""}</p>
-          <div class="cardapio-preco">R$ ${Number(item.preco).toFixed(2)}</div>
-          <button class="add-btn"
-                  onclick="addCarrinho(${item.id_item_cardapio}, '${item.nome_item.replace(/'/g,"\\'")}', ${Number(item.preco)})">
-            Adicionar
-          </button>
-        </div>
-      </div>
-    `;
-  });
-
-  atualizarCarrinho(); // limpa visualmente se trocar de restaurante
+async function abrirCardapio(idRest, nomeRest) {
+  restauranteSelecionado = idRest;
+  $("cardapio-area").classList.remove("oculto");
+  $("titulo-cardapio").textContent = `Cardápio de ${nomeRest}`;
+  await carregarCardapioCliente(idRest);
 }
 
-/* ========= CARRINHO ========= */
+async function carregarCardapioCliente(idRest) {
+  const lista = $("lista-cardapio");
+  if (!lista) return;
 
-function addCarrinho(id, nome, preco) {
-  const existente = carrinho.itens.find(i => i.id === id);
+  lista.innerHTML = "Carregando cardápio...";
 
-  if (existente) existente.qtd++;
-  else carrinho.itens.push({ id, nome, preco, qtd: 1 });
+  try {
+    const r = await fetch(`${API}/cardapio/restaurantes/${idRest}`);
+    const itens = await r.json();
 
-  atualizarCarrinho();
+    if (!r.ok) {
+      lista.innerHTML = "<p>Erro ao carregar cardápio.</p>";
+      return;
+    }
+
+    if (!itens.length) {
+      lista.innerHTML = "<p>Este restaurante ainda não cadastrou itens.</p>";
+      return;
+    }
+
+    lista.innerHTML = "";
+
+    itens.forEach((item) => {
+      lista.innerHTML += `
+        <article class="card item-cardapio">
+          <div class="card-body">
+            <h3>${item.nome_item}</h3>
+            <p>${item.descricao || ""}</p>
+            <div class="preco-linha">
+              <span>R$ ${Number(item.preco).toFixed(2)}</span>
+              <button class="btn red cheio"
+                      onclick="adicionarAoCarrinho(${item.id_item_cardapio}, '${item.nome_item.replace(
+                        /'/g,
+                        "\\'"
+                      )}', ${item.preco})">
+                Adicionar
+              </button>
+            </div>
+          </div>
+        </article>
+      `;
+    });
+  } catch (e) {
+    console.error(e);
+    lista.innerHTML = "<p>Erro de conexão ao carregar cardápio.</p>";
+  }
 }
 
-function atualizarCarrinho() {
-  const el = document.getElementById("carrinho");
-  const lista = document.getElementById("carrinho-itens");
-  const totalEl = document.getElementById("carrinho-total");
-  if (!el || !lista || !totalEl) return;
+// ================== CARRINHO & PEDIDOS (CLIENTE) ==================
 
-  if (!carrinho.itens.length) {
-    el.classList.add("oculto");
+function adicionarAoCarrinho(idItemCardapio, nomeItem, preco) {
+  if (!clienteLogado) {
+    alert("Faça login como cliente para adicionar itens.");
+    return;
+  }
+  if (!restauranteSelecionado) {
+    alert("Selecione um restaurante.");
+    return;
+  }
+
+  const existente = carrinho.find(
+    (i) => i.id_item_cardapio === idItemCardapio
+  );
+  if (existente) {
+    existente.quantidade += 1;
+  } else {
+    carrinho.push({
+      id_item_cardapio: idItemCardapio,
+      nome_item: nomeItem,
+      preco: Number(preco),
+      quantidade: 1,
+    });
+  }
+
+  renderCarrinho();
+}
+
+function renderCarrinho() {
+  const box = $("carrinho");
+  const lista = $("carrinho-itens");
+  const totalEl = $("carrinho-total");
+
+  if (!carrinho.length) {
+    box.classList.add("oculto");
     lista.innerHTML = "";
     totalEl.textContent = "R$ 0,00";
     return;
   }
 
-  el.classList.remove("oculto");
+  box.classList.remove("oculto");
   lista.innerHTML = "";
 
   let total = 0;
-
-  carrinho.itens.forEach((item, idx) => {
-    total += item.preco * item.qtd;
+  carrinho.forEach((item) => {
+    const subtotal = item.preco * item.quantidade;
+    total += subtotal;
 
     lista.innerHTML += `
       <div class="carrinho-item">
-        <span>${item.nome} (x${item.qtd})</span>
-        <button class="btn red" style="padding:4px 8px;font-size:.8rem"
-                onclick="removerItem(${idx})">
-          X
-        </button>
+        <span>${item.quantidade}x ${item.nome_item}</span>
+        <span>R$ ${subtotal.toFixed(2)}</span>
       </div>
     `;
   });
@@ -280,51 +294,55 @@ function atualizarCarrinho() {
   totalEl.textContent = "R$ " + total.toFixed(2);
 }
 
-function removerItem(idx) {
-  carrinho.itens.splice(idx, 1);
-  atualizarCarrinho();
-}
-
 async function finalizarPedido() {
   if (!clienteLogado) {
     alert("Faça login como cliente.");
     return;
   }
-  if (!carrinho.itens.length) {
-    alert("Carrinho vazio.");
+  if (!restauranteSelecionado) {
+    alert("Selecione um restaurante.");
+    return;
+  }
+  if (!carrinho.length) {
+    alert("Seu carrinho está vazio.");
     return;
   }
 
   const payload = {
     id_cliente: clienteLogado.id_cliente,
-    id_restaurante: carrinho.restauranteId,
-    itens: carrinho.itens.map(i => ({
-      id_item_cardapio: i.id,
-      quantidade: i.qtd
-    }))
+    id_restaurante: restauranteSelecionado,
+    itens: carrinho.map((item) => ({
+      id_item_cardapio: item.id_item_cardapio,
+      quantidade: item.quantidade,
+    })),
   };
 
-  const r = await fetch(`${API}/pedidos`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + tokenCliente
-    },
-    body: JSON.stringify(payload)
-  });
+  try {
+    const r = await fetch(`${API}/pedidos`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(tokenCliente ? { Authorization: "Bearer " + tokenCliente } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
 
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.erro || "Erro ao criar pedido.");
-    return;
+    const data = await r.json();
+
+    if (!r.ok) {
+      alert(data.erro || "Erro ao criar pedido.");
+      return;
+    }
+
+    alert("Pedido realizado com sucesso!");
+    carrinho = [];
+    renderCarrinho();
+    carregarPedidosCliente();
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao finalizar pedido.");
   }
-
-  alert("Pedido enviado!");
-  carrinho.itens = [];
-  atualizarCarrinho();
 }
-
-/* ========= CLIENTE — ACOMPANHAR PEDIDOS ========= */
 
 async function carregarPedidosCliente() {
   if (!clienteLogado) {
@@ -332,73 +350,115 @@ async function carregarPedidosCliente() {
     return;
   }
 
-  const area = document.getElementById("area-pedidos-cliente");
-  const listaEl = document.getElementById("lista-pedidos-cliente");
+  const area = $("area-pedidos-cliente");
+  const listaEl = $("lista-pedidos-cliente");
   if (!area || !listaEl) return;
 
   area.classList.remove("oculto");
   listaEl.innerHTML = "Carregando...";
 
-  const r = await fetch(`${API}/pedidos`);
-  const lista = await r.json();
+  try {
+    const r = await fetch(`${API}/pedidos`);
+    const lista = await r.json();
 
-  const meus = lista.filter(p => p.id_cliente === clienteLogado.id_cliente);
+    if (!r.ok) {
+      listaEl.innerHTML = "<p>Erro ao carregar pedidos.</p>";
+      return;
+    }
 
-  if (!meus.length) {
-    listaEl.innerHTML = "<p class='info-pequena'>Você ainda não fez nenhum pedido.</p>";
-    return;
+    const meus = lista.filter(
+      (p) => p.id_cliente === clienteLogado.id_cliente
+    );
+
+    if (!meus.length) {
+      listaEl.innerHTML =
+        "<p class='info-pequena'>Você ainda não fez pedidos.</p>";
+      return;
+    }
+
+    listaEl.innerHTML = "";
+
+    meus.forEach((p) => {
+      const data = new Date(p.data_hora);
+      const formato = data.toLocaleString("pt-BR");
+      const total = typeof p.total === "number" ? p.total : 0;
+      const nomeRest =
+        p.nome_restaurante || p.restaurante || `Restaurante ${p.id_restaurante}`;
+
+      listaEl.innerHTML += `
+        <div class="pedido-card">
+          <div class="pedido-info">
+            <strong>Pedido #${p.id_pedido}</strong>
+            <span>Restaurante: ${nomeRest}</span>
+            <span>Data: ${formato}</span>
+            <span>Valor: R$ ${total.toFixed(2)}</span>
+          </div>
+          <div>
+            <span class="${classeStatus(p.pedido_status)}">
+              ${p.pedido_status.replace("_", " ")}
+            </span>
+          </div>
+        </div>
+      `;
+    });
+  } catch (e) {
+    console.error(e);
+    listaEl.innerHTML =
+      "<p>Erro de conexão ao carregar pedidos.</p>";
   }
-
-  listaEl.innerHTML = "";
-
-  meus.forEach(p => {
-    const data = new Date(p.data_hora);
-    const formato = data.toLocaleString("pt-BR");
-
-    listaEl.innerHTML += `
-      <div class="pedido-card">
-        <div class="pedido-info">
-          <strong>Pedido #${p.id_pedido}</strong>
-          <span>Restaurante: ${p.restaurante || p.id_restaurante}</span>
-          <span>Data: ${formato}</span>
-        </div>
-        <div>
-          <span class="${classeStatus(p.pedido_status)}">
-            ${p.pedido_status.replace("_", " ")}
-          </span>
-        </div>
-      </div>
-    `;
-  });
 }
 
-/* ========= RESTAURANTE — CARDÁPIO ========= */
+// ================== RESTAURANTE - MEU CARDÁPIO ==================
 
 async function carregarMeuCardapio() {
-  const cont = document.getElementById("meu-cardapio");
-  if (!cont || !restLogado) return;
+  if (!restLogado) return;
 
-  const r = await fetch(`${API}/cardapio/restaurantes/${restLogado.id_restaurante}`);
-  const lista = await r.json();
+  const container = $("meu-cardapio");
+  if (!container) return;
 
-  cont.innerHTML = "";
+  container.innerHTML = "Carregando itens...";
 
-  lista.forEach(item => {
-    cont.innerHTML += `
-      <div class="cardapio-item">
-        <img src="https://picsum.photos/400/300?rest=${item.id_item_cardapio}">
-        <div class="cardapio-info">
-          <h4>${item.nome_item}</h4>
-          <p>${item.descricao || ""}</p>
-          <div class="cardapio-preco">R$ ${Number(item.preco).toFixed(2)}</div>
-          <button class="btn outline cheio" style="margin-top:8px"
-                  onclick="removerItemRest(${item.id_item_cardapio})">
-            Excluir
-          </button>
-        </div>
-      </div>
-    `;
-  });
+  try {
+    const r = await fetch(
+      `${API}/cardapio/restaurantes/${restLogado.id_restaurante}`
+    );
+    const itens = await r.json();
+
+    if (!r.ok) {
+      container.innerHTML = "<p>Erro ao carregar cardápio.</p>";
+      return;
+    }
+
+    if (!itens.length) {
+      container.innerHTML =
+        "<p>Nenhum item cadastrado ainda.</p>";
+      return;
+    }
+
+    container.innerHTML = "";
+
+    itens.forEach((item) => {
+      container.innerHTML += `
+        <article class="card item-cardapio">
+          <div class="card-body">
+            <h3>${item.nome_item}</h3>
+            <p>${item.descricao || ""}</p>
+            <div class="preco-linha">
+              <span>R$ ${Number(item.preco).toFixed(2)}</span>
+            </div>
+            <button class="btn outline"
+                    onclick="removerItemRest(${item.id_item_cardapio})">
+              Excluir
+            </button>
+          </div>
+        </article>
+      `;
+    });
+  } catch (e) {
+    console.error(e);
+    container.innerHTML =
+      "<p>Erro de conexão ao carregar cardápio.</p>";
+  }
 }
 
 async function addItemCardapio() {
@@ -407,52 +467,82 @@ async function addItemCardapio() {
     return;
   }
 
-  const payload = {
-    id_restaurante: restLogado.id_restaurante,
-    nome_item: document.getElementById("item-nome").value,
-    descricao: document.getElementById("item-desc").value,
-    preco: Number(document.getElementById("item-preco").value),
-    ativo: 1
-  };
+  const nome = $("item-nome").value.trim();
+  const preco = Number($("item-preco").value);
+  const desc = $("item-desc").value.trim();
 
-  const r = await fetch(`${API}/cardapio`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + tokenRest
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await r.json();
-  if (!r.ok) {
-    alert(data.erro || "Erro ao cadastrar item.");
+  if (!nome || !preco) {
+    alert("Preencha pelo menos nome e preço.");
     return;
   }
 
-  alert("Item adicionado!");
-  carregarMeuCardapio();
+  const payload = {
+    id_restaurante: restLogado.id_restaurante,
+    nome_item: nome,
+    descricao: desc,
+    preco: preco,
+    ativo: 1,
+  };
+
+  try {
+    const r = await fetch(`${API}/cardapio`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(tokenRest ? { Authorization: "Bearer " + tokenRest } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      alert(data.erro || "Erro ao cadastrar item.");
+      return;
+    }
+
+    alert("Item adicionado!");
+    $("item-nome").value = "";
+    $("item-preco").value = "";
+    $("item-desc").value = "";
+
+    carregarMeuCardapio();
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao adicionar item.");
+  }
 }
 
 async function removerItemRest(id) {
   if (!confirm("Excluir este item?")) return;
 
-  const r = await fetch(`${API}/cardapio/${id}`, {
-    method: "DELETE",
-    headers: { "Authorization": "Bearer " + tokenRest }
-  });
+  try {
+    const r = await fetch(`${API}/cardapio/${id}`, {
+      method: "DELETE",
+      headers: {
+        ...(tokenRest ? { Authorization: "Bearer " + tokenRest } : {}),
+      },
+    });
 
-  if (!r.ok && r.status !== 204) {
-    const data = await r.json().catch(() => ({}));
-    alert(data.erro || "Erro ao excluir item.");
-    return;
+    if (!r.ok && r.status !== 204) {
+      let msg = "Erro ao excluir item.";
+      try {
+        const data = await r.json();
+        if (data.erro) msg = data.erro;
+      } catch (_) {}
+      alert(msg);
+      return;
+    }
+
+    alert("Item removido.");
+    carregarMeuCardapio();
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao excluir item.");
   }
-
-  alert("Item removido.");
-  carregarMeuCardapio();
 }
 
-/* ========= RESTAURANTE — PEDIDOS ========= */
+// ================== RESTAURANTE - PEDIDOS ==================
 
 async function carregarPedidosRestaurante() {
   if (!restLogado) {
@@ -460,82 +550,109 @@ async function carregarPedidosRestaurante() {
     return;
   }
 
-  const area = document.getElementById("area-pedidos-rest");
-  const listaEl = document.getElementById("lista-pedidos-rest");
+  const area = $("area-pedidos-rest");
+  const listaEl = $("lista-pedidos-rest");
   if (!area || !listaEl) return;
 
   area.classList.remove("oculto");
   listaEl.innerHTML = "Carregando...";
 
-  const r = await fetch(`${API}/pedidos`);
-  const lista = await r.json();
+  try {
+    const r = await fetch(`${API}/pedidos`);
+    const lista = await r.json();
 
-  const meus = lista.filter(p => p.id_restaurante === restLogado.id_restaurante);
+    if (!r.ok) {
+      listaEl.innerHTML = "<p>Erro ao carregar pedidos.</p>";
+      return;
+    }
 
-  if (!meus.length) {
-    listaEl.innerHTML = "<p class='info-pequena'>Nenhum pedido recebido ainda.</p>";
-    return;
+    const meus = lista.filter(
+      (p) => p.id_restaurante === restLogado.id_restaurante
+    );
+
+    if (!meus.length) {
+      listaEl.innerHTML =
+        "<p>Nenhum pedido recebido ainda.</p>";
+      return;
+    }
+
+    listaEl.innerHTML = "";
+
+    meus.forEach((p) => {
+      const data = new Date(p.data_hora);
+      const formato = data.toLocaleString("pt-BR");
+      const total = typeof p.total === "number" ? p.total : 0;
+      const nomeCliente =
+        p.nome_cliente || p.cliente || `Cliente ${p.id_cliente}`;
+
+      const options = STATUS_PEDIDO.map(
+        (st) => `
+        <option value="${st}" ${
+          st === p.pedido_status ? "selected" : ""
+        }>
+          ${st.replace("_", " ")}
+        </option>
+      `
+      ).join("");
+
+      listaEl.innerHTML += `
+        <div class="pedido-card">
+          <div class="pedido-info">
+            <strong>Pedido #${p.id_pedido}</strong>
+            <span>Cliente: ${nomeCliente}</span>
+            <span>Data: ${formato}</span>
+            <span>Valor: R$ ${total.toFixed(2)}</span>
+          </div>
+          <div class="pedido-acoes">
+            <select id="sel-status-${p.id_pedido}">
+              ${options}
+            </select>
+            <button class="btn red cheio"
+                    onclick="salvarStatusPedido(${p.id_pedido})">
+              Atualizar status
+            </button>
+          </div>
+        </div>
+      `;
+    });
+  } catch (e) {
+    console.error(e);
+    listaEl.innerHTML =
+      "<p>Erro de conexão ao carregar pedidos.</p>";
   }
-
-  listaEl.innerHTML = "";
-
-  meus.forEach(p => {
-    const data = new Date(p.data_hora);
-    const formato = data.toLocaleString("pt-BR");
-
-    const options = STATUS_PEDIDO.map(st => `
-      <option value="${st}" ${st === p.pedido_status ? "selected" : ""}>
-        ${st.replace("_"," ")}
-      </option>
-    `).join("");
-
-    listaEl.innerHTML += `
-      <div class="pedido-card">
-        <div class="pedido-info">
-          <strong>Pedido #${p.id_pedido}</strong>
-          <span>Cliente: ${p.cliente || p.id_cliente}</span>
-          <span>Data: ${formato}</span>
-        </div>
-        <div class="pedido-acoes">
-          <select id="sel-status-${p.id_pedido}">
-            ${options}
-          </select>
-          <button class="btn red cheio"
-                  onclick="salvarStatusPedido(${p.id_pedido})">
-            Atualizar status
-          </button>
-        </div>
-      </div>
-    `;
-  });
 }
 
-async function salvarStatusPedido(id_pedido) {
-  if (!restLogado || !tokenRest) {
-    alert("Faça login como restaurante.");
-    return;
-  }
-
-  const select = document.getElementById(`sel-status-${id_pedido}`);
+async function salvarStatusPedido(idPedido) {
+  const select = $(`sel-status-${idPedido}`);
   if (!select) return;
 
   const novoStatus = select.value;
 
-  const r = await fetch(`${API}/pedidos/${id_pedido}/status`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + tokenRest
-    },
-    body: JSON.stringify({ status: novoStatus })
-  });
+  try {
+    const r = await fetch(`${API}/pedidos/${idPedido}/status`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...(tokenRest ? { Authorization: "Bearer " + tokenRest } : {}),
+      },
+      body: JSON.stringify({ status: novoStatus }),
+    });
 
-  if (!r.ok) {
-    const data = await r.json().catch(() => ({}));
-    alert(data.erro || "Erro ao atualizar status do pedido.");
-    return;
+    const data = await r.json();
+
+    if (!r.ok) {
+      alert(data.erro || "Erro ao atualizar status.");
+      return;
+    }
+
+    alert("Status atualizado!");
+    carregarPedidosRestaurante();
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao atualizar status.");
   }
-
-  alert("Status atualizado!");
-  carregarPedidosRestaurante();
 }
+
+// ================== INICIAL ==================
+
+console.log("app.js carregado");
