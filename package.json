@@ -1,22 +1,17 @@
 {
   "name": "dex-api",
   "version": "1.0.0",
-  "private": true,
-  "description": "API Dex (Delivery) - Node + MySQL",
   "type": "module",
-  "main": ".\\src\\Servidor.js",
+  "main": "src/Servidor.js",
   "scripts": {
-    "banco:aplicar": "node .\\Tarefas\\Aplicar-schema.js",
-    "banco:testar": "node .\\Tarefas\\Testar-Conexao.js",
-    "dev": "node .\\src\\Servidor.js",
-    "start": "node .\\src\\Servidor.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "dev": "node ./src/Servidor.js",
+    "banco:aplicar": "node ./Tarefas/Aplicar-schema.js"
   },
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "dotenv": "^17.2.3",
-    "express": "^4.21.2",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.15.3"
   }
 }

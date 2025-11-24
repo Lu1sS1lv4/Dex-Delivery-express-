@@ -1,22 +1,27 @@
 import { PedidosRepositorio } from './pedidos.repositorio.js';
 
-const STATUS_VALIDOS = ['CRIADO','EM_PREPARO','A_CAMINHO','ENTREGUE','CANCELADO'];
+const STATUS_VALIDOS = ['CRIADO', 'EM_PREPARO', 'A_CAMINHO', 'ENTREGUE', 'CANCELADO'];
 
-function validarPedidoCriacao({ id_cliente, id_restaurante, itens }) {
-  if (!id_cliente || !id_restaurante) return 'id_cliente e id_restaurante são obrigatórios.';
-  if (!Array.isArray(itens) || itens.length === 0) return 'Envie ao menos um item.';
+function validarCriacao({ id_cliente, id_restaurante, itens }) {
+  if (!id_cliente || !id_restaurante) {
+    return 'id_cliente e id_restaurante são obrigatórios';
+  }
+  if (!Array.isArray(itens) || itens.length === 0) {
+    return 'Envie ao menos um item';
+  }
   for (const it of itens) {
-    if (!it?.descricao) return 'Item sem descrição.';
-    if (!(Number(it.quantidade) > 0)) return 'Quantidade deve ser > 0.';
-    if (!(Number(it.preco_unitario) >= 0)) return 'Preço unitário deve ser >= 0.';
+    if (!it?.id_item_cardapio) return 'Item sem id_item_cardapio';
+    if (!(Number(it.quantidade) > 0)) return 'quantidade deve ser > 0';
   }
   return null;
 }
 
 export const PedidosControlador = {
   async listar(_req, res, next) {
-    try { res.json(await PedidosRepositorio.listar()); }
-    catch (e) { next(e); }
+    try {
+      const lista = await PedidosRepositorio.listar();
+      res.json(lista);
+    } catch (e) { next(e); }
   },
 
   async obter(req, res, next) {
@@ -27,29 +32,40 @@ export const PedidosControlador = {
     } catch (e) { next(e); }
   },
 
-  // body: { id_cliente, id_restaurante, itens: [{descricao, quantidade, preco_unitario}] }
+  // body: { id_cliente, id_restaurante, itens: [{id_item_cardapio, quantidade}] }
   async criar(req, res, next) {
     try {
-      const erro = validarPedidoCriacao(req.body);
+      const erro = validarCriacao(req.body);
       if (erro) return res.status(400).json({ erro });
 
       const { id_cliente, id_restaurante, itens } = req.body;
-      const id_pedido = await PedidosRepositorio.criarPedido({ id_cliente, id_restaurante });
+
+      const id_pedido = await PedidosRepositorio.criarPedido({
+        id_cliente,
+        id_restaurante
+      });
 
       for (const it of itens) {
+        const preco = await PedidosRepositorio.precoDoItem(it.id_item_cardapio);
+        if (preco == null) {
+          return res.status(400).json({
+            erro: `Item de cardápio inexistente: ${it.id_item_cardapio}`
+          });
+        }
+
         await PedidosRepositorio.adicionarItem({
           id_pedido,
-          descricao: it.descricao,
+          id_item_cardapio: Number(it.id_item_cardapio),
           quantidade: Number(it.quantidade),
-          preco_unitario: Number(it.preco_unitario)
+          preco_unitario: preco
         });
       }
 
-      res.status(201).json(await PedidosRepositorio.obterCompleto(id_pedido));
+      const completo = await PedidosRepositorio.obterCompleto(id_pedido);
+      res.status(201).json(completo);
     } catch (e) { next(e); }
   },
 
-  // body: { status }
   async atualizarStatus(req, res, next) {
     try {
       const { status } = req.body;
@@ -58,7 +74,8 @@ export const PedidosControlador = {
       }
       const id = Number(req.params.id);
       await PedidosRepositorio.atualizarStatus(id, status);
-      res.json(await PedidosRepositorio.obterCompleto(id));
+      const ped = await PedidosRepositorio.obterCompleto(id);
+      res.json(ped);
     } catch (e) { next(e); }
   },
 

@@ -1,15 +1,24 @@
 import { ClientesRepositorio } from './clientes.repositorio.js';
+import { hashSenha, confereSenha, gerarToken } from '../../utils/seguranca.js';
 
-function validarCliente({ nome, telefone, endereco }) {
-  if (!nome || !telefone || !endereco) return 'Nome, telefone e endereço são obrigatórios.';
-  if (!/^\d{11}$/.test(String(telefone))) return 'Telefone deve ter 11 dígitos numéricos.';
+function validar(dados, modo = 'criar') {
+  const { nome, telefone, endereco, email, senha } = dados;
+
+  if (!nome || !telefone || !endereco || !email || (modo === 'criar' && !senha)) {
+    return 'nome, telefone, endereco, email e senha são obrigatórios';
+  }
+  if (!/^\d{11}$/.test(String(telefone))) return 'telefone deve ter 11 dígitos numéricos';
+  if (!/^[^@]+@[^@]+\.[^@]+$/.test(email)) return 'email inválido';
+
   return null;
 }
 
 export const ClientesControlador = {
   async listar(_req, res, next) {
-    try { res.json(await ClientesRepositorio.listar()); }
-    catch (e) { next(e); }
+    try {
+      const lista = await ClientesRepositorio.listar();
+      res.json(lista);
+    } catch (e) { next(e); }
   },
 
   async obter(req, res, next) {
@@ -22,20 +31,33 @@ export const ClientesControlador = {
 
   async criar(req, res, next) {
     try {
-      const erro = validarCliente(req.body);
+      const erro = validar(req.body, 'criar');
       if (erro) return res.status(400).json({ erro });
-      const novo = await ClientesRepositorio.criar(req.body);
-      res.status(201).json(novo);
-    } catch (e) { next(e); }
+
+      const existe = await ClientesRepositorio.obterPorEmail(req.body.email);
+      if (existe) return res.status(409).json({ erro: 'Email já cadastrado' });
+
+      const senha_hash = await hashSenha(req.body.senha);
+      const id = await ClientesRepositorio.criar({ ...req.body, senha_hash });
+      const cli = await ClientesRepositorio.obterPorId(id);
+      res.status(201).json(cli);
+    } catch (e) {
+      if (e.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ erro: 'Telefone ou email já cadastrados' });
+      }
+      next(e);
+    }
   },
 
   async atualizar(req, res, next) {
     try {
       const id = Number(req.params.id);
-      const erro = validarCliente(req.body);
+      const erro = validar(req.body, 'atualizar');
       if (erro) return res.status(400).json({ erro });
-      const atualizado = await ClientesRepositorio.atualizar(id, req.body);
-      res.json(atualizado);
+
+      await ClientesRepositorio.atualizar(id, req.body);
+      const cli = await ClientesRepositorio.obterPorId(id);
+      res.json(cli);
     } catch (e) { next(e); }
   },
 
@@ -45,4 +67,35 @@ export const ClientesControlador = {
       res.status(204).end();
     } catch (e) { next(e); }
   },
+
+  async login(req, res, next) {
+    try {
+      const { email, senha } = req.body;
+      if (!email || !senha) {
+        return res.status(400).json({ erro: 'email e senha são obrigatórios' });
+      }
+
+      const cli = await ClientesRepositorio.obterPorEmail(email);
+      if (!cli) return res.status(401).json({ erro: 'Credenciais inválidas' });
+
+      const ok = await confereSenha(senha, cli.senha);
+      if (!ok) return res.status(401).json({ erro: 'Credenciais inválidas' });
+
+      const token = gerarToken({
+        tipo: 'cliente',
+        id_cliente: cli.id_cliente,
+        email: cli.email,
+        nome: cli.nome
+      });
+
+      res.json({
+        token,
+        cliente: {
+          id_cliente: cli.id_cliente,
+          nome: cli.nome,
+          email: cli.email
+        }
+      });
+    } catch (e) { next(e); }
+  }
 };

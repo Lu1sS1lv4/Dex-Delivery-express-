@@ -6,8 +6,8 @@ export const PedidosRepositorio = {
       `SELECT p.id_pedido, p.id_cliente, p.id_restaurante, p.data_hora, p.pedido_status,
               c.nome AS cliente, r.nome_restaurante AS restaurante
          FROM Pedidos p
-         JOIN Clientes c      ON c.id_cliente      = p.id_cliente
-         JOIN Restaurantes r  ON r.id_restaurante  = p.id_restaurante
+         JOIN Clientes c     ON c.id_cliente     = p.id_cliente
+         JOIN Restaurantes r ON r.id_restaurante = p.id_restaurante
         ORDER BY p.id_pedido DESC`
     );
     return rows;
@@ -16,10 +16,16 @@ export const PedidosRepositorio = {
   async obterCompleto(id_pedido) {
     const [[pedido]] = await pool.query('SELECT * FROM Pedidos WHERE id_pedido=?', [id_pedido]);
     if (!pedido) return null;
+
     const [itens] = await pool.query(
-      'SELECT id_item, descricao, quantidade, preco_unitario, total FROM ItemPedido WHERE id_pedido=?',
+      `SELECT i.id_item, i.id_item_cardapio, ic.nome_item, i.quantidade, i.preco_unitario,
+              (i.quantidade * i.preco_unitario) AS total
+         FROM ItemPedido i
+         JOIN ItensCardapio ic ON ic.id_item_cardapio = i.id_item_cardapio
+        WHERE i.id_pedido=?`,
       [id_pedido]
     );
+
     return { ...pedido, itens };
   },
 
@@ -31,11 +37,19 @@ export const PedidosRepositorio = {
     return res.insertId;
   },
 
-  async adicionarItem({ id_pedido, descricao, quantidade, preco_unitario }) {
+  async adicionarItem({ id_pedido, id_item_cardapio, quantidade, preco_unitario }) {
     await pool.query(
-      'INSERT INTO ItemPedido (id_pedido, descricao, quantidade, preco_unitario) VALUES (?,?,?,?)',
-      [id_pedido, descricao, quantidade, preco_unitario]
+      'INSERT INTO ItemPedido (id_pedido, id_item_cardapio, quantidade, preco_unitario) VALUES (?,?,?,?)',
+      [id_pedido, id_item_cardapio, quantidade, preco_unitario]
     );
+  },
+
+  async precoDoItem(id_item_cardapio) {
+    const [[row]] = await pool.query(
+      'SELECT preco FROM ItensCardapio WHERE id_item_cardapio=?',
+      [id_item_cardapio]
+    );
+    return row ? Number(row.preco) : null;
   },
 
   async atualizarStatus(id_pedido, novoStatus) {
@@ -43,6 +57,6 @@ export const PedidosRepositorio = {
   },
 
   async remover(id_pedido) {
-    await pool.query('DELETE FROM Pedidos WHERE id_pedido=?', [id_pedido]); // ON DELETE CASCADE remove itens
+    await pool.query('DELETE FROM Pedidos WHERE id_pedido=?', [id_pedido]);
   }
 };
