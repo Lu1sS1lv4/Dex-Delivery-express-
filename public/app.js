@@ -45,6 +45,104 @@ function classeStatus(status) {
   }
 }
 
+// ================== CADASTRO DE RESTAURANTE ==================
+
+async function cadastrarRestaurante() {
+  const nome = $("cad-rest-nome").value.trim();
+  const tipo = $("cad-rest-tipo").value.trim();
+  const telefone = $("cad-rest-tel").value.trim();
+  const email = $("cad-rest-email").value.trim();
+  const senha = $("cad-rest-senha").value.trim();
+
+  if (!nome || !tipo || !telefone || !email || !senha) {
+    alert("Preencha todos os campos.");
+    return;
+  }
+
+  const payload = {
+    nome_restaurante: nome,
+    tipo_cozinha: tipo,
+    telefone_restaurante: telefone,
+    email: email,
+    senha: senha,
+  };
+
+  try {
+    const r = await fetch(`${API}/restaurantes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      alert(data.erro || "Erro ao cadastrar restaurante.");
+      return;
+    }
+
+    alert("Cadastro realizado com sucesso! Faça login para continuar.");
+    $("cad-rest-nome").value = "";
+    $("cad-rest-tipo").value = "";
+    $("cad-rest-tel").value = "";
+    $("cad-rest-email").value = "";
+    $("cad-rest-senha").value = "";
+    window.location.href = "index.html";
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao cadastrar restaurante.");
+  }
+}
+
+// ================== CADASTRO DE CLIENTE ==================
+
+async function cadastrarCliente() {
+  const nome = $("cad-cli-nome").value.trim();
+  const email = $("cad-cli-email").value.trim();
+  const telefone = $("cad-cli-tel").value.trim();
+  const endereco = $("cad-cli-end").value.trim();
+  const senha = $("cad-cli-senha").value.trim();
+
+  if (!nome || !email || !telefone || !endereco || !senha) {
+    alert("Preencha todos os campos.");
+    return;
+  }
+
+  const payload = {
+    nome: nome,
+    email: email,
+    telefone: telefone,
+    endereco: endereco,
+    senha: senha,
+  };
+
+  try {
+    const r = await fetch(`${API}/clientes`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      alert(data.erro || "Erro ao cadastrar cliente.");
+      return;
+    }
+
+    alert("Cadastro realizado com sucesso! Faça login para continuar.");
+    $("cad-cli-nome").value = "";
+    $("cad-cli-email").value = "";
+    $("cad-cli-tel").value = "";
+    $("cad-cli-end").value = "";
+    $("cad-cli-senha").value = "";
+    window.location.href = "index.html";
+  } catch (e) {
+    console.error(e);
+    alert("Erro de conexão ao cadastrar cliente.");
+  }
+}
+
 // ================== LOGIN / FLUXO INICIAL ==================
 
 function mostrarLoginCliente() {
